@@ -8,7 +8,7 @@ const { Paragraph, Link, Text } = Typography;
 interface Props {
     locale: any
     version: string
-    Weather: string
+    Weather?: string
     isWin64App: boolean
 }
 const App: React.FC<Props> = ({ locale, version, Weather, isWin64App }) => (

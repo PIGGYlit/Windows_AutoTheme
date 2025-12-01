@@ -6,6 +6,9 @@
         "citiTitle": "城市",
         "citiError": "你还没有选择城市！",
         "citiPlaceholder": "输入城市名搜索",
+        "switchStyemMode": "切换主题背景",
+        "switchStyemModeTip": "切换系统主题时，自动切换为对应的主题背景。",
+        "switchStyemModeOpenTip": "开启后，应用主题时会打开系统设置窗口。",
         "winBgEffect": "窗口背景材料",
         "Mica": "云母",
         "Acrylic": "亚克力",
@@ -50,10 +53,21 @@
     "dark": "暗黑",
     "light": "浅色",
     "switch": "切换到",
+    "ThemeDark": "深色主题",
+    "ThemeLight": "浅色主题",
     "doc": [
         "天气",
         "说明",
         " 本程序由：荼泱Tuyang 个人开发完全开源免费。",
-        "帮助文档："
-    ]
+        "获取帮助："
+    ],
+    "themeName": {
+        "spotlight": "Windows聚焦,动态图像",
+        "dark": "Windows深色",
+        "themeA": "发光",
+        "themeB": "捕获的动作",
+        "themeD": "流畅",
+        "themeC": "日出",
+        "Custom": "自定义"
+    }
 }

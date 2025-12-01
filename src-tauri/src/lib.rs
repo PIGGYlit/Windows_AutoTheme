@@ -1,8 +1,13 @@
+// 使用模块中的类型
+mod theme_apply;
+mod windows_themes;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::ptr;
 use std::sync::Mutex;
 use tauri::command;
+
+use crate::windows_themes::ThemeInfo;
 use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
@@ -11,6 +16,7 @@ use tauri::{
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_log::{Target, TargetKind};
+use theme_apply::ThemeApplier;
 use tokio::time::{sleep, Duration};
 use winapi::shared::minwindef::{DWORD, HKEY};
 use winapi::shared::winerror::ERROR_SUCCESS;
@@ -22,8 +28,10 @@ use winapi::{
 struct AppState {
     tray: Mutex<Option<TrayIcon>>,
 }
+
 fn show_window(app: &AppHandle) {
     let windows = app.webview_windows();
+    //显示webview
     if let Some(window) = windows.values().next() {
         if let Err(e) = window.show() {
             eprintln!("无法显示窗口: {}", e);
@@ -35,6 +43,7 @@ fn show_window(app: &AppHandle) {
             eprintln!("无法设置窗口焦点: {}", e);
         }
     }
+    app.emit("show-app", ()).unwrap();
 }
 
 async fn notify_system_theme_changed() {
@@ -240,22 +249,36 @@ fn update_tray_menu_item_title(
 }
 #[tauri::command]
 fn is_running_in_msix() -> bool {
-  if let Ok(exe_path) = std::env::current_exe() {
-    if let Some(dir) = exe_path.parent() {
-      let dir_str = dir.to_string_lossy().to_lowercase();
-      return dir_str.starts_with(r"c:\program files\windowsapps");
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(dir) = exe_path.parent() {
+            let dir_str = dir.to_string_lossy().to_lowercase();
+            return dir_str.starts_with(r"c:\program files\windowsapps");
+        }
     }
-  }
-  false
+    false
 }
+/// Read a single preview file and return as data URL (base64).
 
+#[tauri::command]
+async fn get_windows_themes() -> Vec<ThemeInfo> {
+    tokio::task::spawn_blocking(|| windows_themes::get_all_themes())
+        .await
+        .unwrap_or_default()
+}
+// Tauri 命令：应用主题（静默，不显示窗口）
+#[tauri::command]
+async fn apply_theme(theme_path: String) -> Result<(), String> {
+    crate::ThemeApplier::apply_theme_by_path(&theme_path)
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
         tauri::Builder::default()
+            .plugin(tauri_plugin_fs::init())
             .plugin(tauri_plugin_os::init())
+            .plugin(tauri_plugin_persisted_scope::init())
             .plugin(
                 tauri_plugin_log::Builder::new()
                     .targets([
@@ -307,7 +330,9 @@ pub fn run() {
             .invoke_handler(tauri::generate_handler![
                 set_system_theme,
                 update_tray_menu_item_title,
-                is_running_in_msix
+                is_running_in_msix,
+                get_windows_themes,
+                apply_theme,
             ])
             .run(tauri::generate_context!())
             .expect("error while running tauri application");

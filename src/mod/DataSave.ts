@@ -1,10 +1,9 @@
 // src/hooks/useAppData.ts
-import { useLocalStorageState } from "ahooks";
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { AppDataType, RatingPromptType } from "../Type";
 import { isEnabled } from "@tauri-apps/plugin-autostart";
 import { isWin11 } from "./ThemeConfig";
-import { languageItems } from "../language";
-
 const SystemStart = await isEnabled();
 
 // 深度合并函数
@@ -33,9 +32,6 @@ const deepMerge = (defaults: any, stored: any): any => {
   }
   return merged;
 };
-
-const navigatorLanguage = navigator.language.replace('-', '_');
-
 // 默认评分提示状态
 const defaultRatingPrompt: RatingPromptType = {
   lastPromptTime: 0,
@@ -47,83 +43,110 @@ const defaultRatingPrompt: RatingPromptType = {
 const defaultAppData: AppDataType = {
   open: false,
   rcrl: false,
-  city: { id: "", name: '' },
+  city: { position: undefined, name: '' },
   times: ["6:00", "18:00"],
   Autostart: SystemStart,
-  language:  languageItems.find(item => item?.key === navigatorLanguage)?.key || 'en_US',
+  language: undefined,
   StartShow: true,
   Skipversion: '',
   winBgEffect: isWin11 ? 'Mica' : 'Default',
   deviation: 15,
   rawTime: ["6:00", "18:00"],
   ratingPrompt: defaultRatingPrompt,
+  StyemTheme: [],
+  StyemThemeEnable: false
 };
 
-const useAppData = () => {
-  const [AppData, setAppData] = useLocalStorageState<AppDataType>('AppData', {
-    defaultValue: defaultAppData,
-    deserializer: (value) => {
-      try {
-        const storedData = JSON.parse(value);
-        const merged = deepMerge(defaultAppData, storedData);
-        
-        // 确保ratingPrompt结构正确
-        if (!merged.ratingPrompt) {
-          merged.ratingPrompt = { ...defaultRatingPrompt };
-        } else {
-          merged.ratingPrompt = {
-            ...defaultRatingPrompt,
-            ...merged.ratingPrompt
+interface AppDataStore {
+  AppData: AppDataType;
+  setData: (update: Partial<AppDataType>) => void;
+  updateRatingPrompt: (update: Partial<RatingPromptType>) => void;
+}
+
+const useAppDataStore = create<AppDataStore>()(
+  persist(
+    (set) => ({
+      AppData: defaultAppData,
+
+      setData: (update: Partial<AppDataType>) => {
+        set((state) => {
+          const prevData = state.AppData || defaultAppData;
+
+          // 创建更新后的对象
+          const updatedData = {
+            ...prevData,
+            ...update,
           };
+
+          // 确保ratingPrompt字段存在且结构正确
+          if (!updatedData.ratingPrompt) {
+            updatedData.ratingPrompt = { ...defaultRatingPrompt };
+          }
+
+          // 确保language字段有效
+          if (!updatedData.language || updatedData.language === '') {
+            updatedData.language = 'en_US';
+          }
+
+          return { AppData: updatedData as AppDataType };
+        });
+      },
+
+      updateRatingPrompt: (update: Partial<RatingPromptType>) => {
+        set((state) => {
+          const prevData = state.AppData || defaultAppData;
+
+          // 创建更新后的对象
+          const updatedData = {
+            ...prevData,
+            ratingPrompt: {
+              ...(prevData.ratingPrompt || defaultRatingPrompt),
+              ...update
+            }
+          };
+
+          return { AppData: updatedData as AppDataType };
+        });
+      },
+    }),
+    {
+      name: 'AppData',
+      // 使用自定义的合并逻辑来替换默认的浅合并
+      merge: (persistedState, currentState) => {
+        if (typeof persistedState === 'object' && persistedState !== null) {
+          const merged = deepMerge(currentState, persistedState);
+
+          // 确保ratingPrompt结构正确
+          if (!merged.AppData.ratingPrompt) {
+            merged.AppData.ratingPrompt = { ...defaultRatingPrompt };
+          } else {
+            merged.AppData.ratingPrompt = {
+              ...defaultRatingPrompt,
+              ...merged.AppData.ratingPrompt
+            };
+          }
+
+          // 确保language字段有效，防止空字符串key导致的问题
+          if (!merged.AppData.language || merged.AppData.language === '') {
+            merged.AppData.language = 'en_US';
+          }
+
+          return merged;
         }
-        
-        return merged;
-      } catch (e) {
-        return defaultAppData;
-      }
-    },
-  });
+        return currentState;
+      },
+      // 可选的版本控制，用于未来的数据迁移
+      version: 1,
+    }
+  )
+);
 
-  const setData = (update: Partial<AppDataType>) => {
-    setAppData((prev) => {
-      // 确保prev不是undefined
-      const prevData = prev || defaultAppData;
-      
-      // 创建更新后的对象
-      const updatedData = {
-        ...prevData,
-        ...update,
-      };
-      
-      // 确保ratingPrompt字段存在且结构正确
-      if (!updatedData.ratingPrompt) {
-        updatedData.ratingPrompt = { ...defaultRatingPrompt };
-      }
-      
-      return updatedData as AppDataType; // 类型断言确保类型安全
-    });
-  };
+// 保持原有API结构的hook
+const useAppData = () => {
+  const { AppData, setData, updateRatingPrompt } = useAppDataStore();
 
-  const updateRatingPrompt = (update: Partial<RatingPromptType>) => {
-    setAppData((prev) => {
-      // 确保prev不是undefined
-      const prevData = prev || defaultAppData;
-      
-      // 创建更新后的对象
-      const updatedData = {
-        ...prevData,
-        ratingPrompt: {
-          ...(prevData.ratingPrompt || defaultRatingPrompt),
-          ...update
-        }
-      };
-      
-      return updatedData as AppDataType; // 类型断言确保类型安全
-    });
-  };
-
-  return { 
-    AppData, 
+  return {
+    AppData,
     setData,
     updateRatingPrompt
   };

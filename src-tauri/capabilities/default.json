@@ -25,6 +25,21 @@
     "autostart:allow-is-enabled",
     "window-state:allow-save-window-state",
     "log:default",
+    "fs:allow-stat",
+    "fs:allow-read",
+    "fs:read-all",
+    "fs:write-all",
+    "fs:allow-create",
+    {
+      "identifier": "fs:default",
+      "allow": [
+        {
+          "path": "**"
+        },
+        "fs:allow-write-recursive",
+        "fs:scope-fs-recursive"
+      ]
+    },
     {
       "identifier": "opener:allow-open-url",
       "allow": [
@@ -44,11 +59,20 @@
       "allow": [
         {
           "url": "https://*.qweather.com"
+        },
+        {
+          "url": "https://api.sunrise-sunset.org"
+        },
+        {
+          "url": "http://demo.ip-api.com/**"
         }
       ],
       "deny": [
         {
           "url": "https://api.qweather.com"
+        },
+        {
+          "url": "https://*.ip-api.com"
         }
       ]
     }

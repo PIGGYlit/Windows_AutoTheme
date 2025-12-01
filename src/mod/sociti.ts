@@ -1,32 +1,16 @@
 import { fetch as fetchHttp } from '@tauri-apps/plugin-http';
 import * as pako from 'pako';
+import { positionType } from '../Type';
 type Props = (key: string, lang?: string) => any;
 
-//寻找html中的指定变量
-const extractSunMoonData = (text: string) => {
-    //console.log(text);
 
-    const getMatch = (regex: RegExp) => text.match(regex)?.[1]?.trim() || "";
 
-    const hid = getMatch(/var\s+hid\s*=\s*"([^"]+)"/);
-    const abstract = getMatch(/<div\s+class="current-abstract"\s*>(.*?)<\/div>/s);
-    const sunMoonJson = getMatch(/window\.sunMoon\s*=\s*(\{.*?\});/s);
-
-    try {
-        const { sun: { rise, set } = { rise: "", set: "" } } = JSON.parse(sunMoonJson || "{}");
-        return { rise, set, hid, abstract };
-    } catch (error) {
-        console.error("JSON 解析错误:", error);
-    }
-
-    return { hid, abstract }; // 解析失败时仍返回基本数据
-};
-
-export const GetHttp = async (url: string) => {
-    const response = await fetchHttp(url, {
+export const GetHttp = async (url: string, RequestInit?: RequestInit) => {
+    const RequestInits = RequestInit ? RequestInit : {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-    });
+    }
+    const response = await fetchHttp(url, RequestInits);
 
     if (response.ok) {
         const contentType = response.headers.get('Content-Type') || '';
@@ -37,8 +21,6 @@ export const GetHttp = async (url: string) => {
             // 如果是 HTML，则直接返回文本内容
 
             data = await response.text();
-
-
         } else if (contentEncoding && contentEncoding.includes('gzip')) {
             // 响应体是 Gzip 压缩的，需要解压
             const arrayBuffer = await response.arrayBuffer();
@@ -69,7 +51,10 @@ const AppCiti: Props = async (name, lang) => {
         getUrl = `https://geoapi.qweather.com/v2/city/top?number=10&lang=${langs}&range=${range}`
     }
     const url = `${getUrl}&key=${Apikey}`;
+    console.log(url);
+
     const data = await GetHttp(url)
+
     return data
 }
 
@@ -83,37 +68,61 @@ type SunriseOptions = {
     throwOnFailure?: boolean;  // 全部失败时是否抛出异常，默认 false（返回 null）
 };
 
+
+// 定位位置
+export async function getLocation() {
+    const data = await GetHttp("http://demo.ip-api.com/json/?fields=66842623&lang=en")
+    const backdata: positionType = {
+        lat: data?.lat,
+        lng: data?.lon,
+        tzid: data?.timezone
+    }
+    return backdata
+}
+function convertTo24Hour(timeStr: string): string {
+    // 创建日期对象并设置时间
+    const [time, period] = timeStr.split(' ');
+    const [hours, minutes, seconds] = time.split(':').map(Number);
+
+    // 设置小时（处理 12 小时制）
+    let hour24 = hours;
+    if (period === 'PM' && hours !== 12) {
+        hour24 = hours + 12;
+    } else if (period === 'AM' && hours === 12) {
+        hour24 = 0;
+    }
+
+    // 格式化为两位数
+    const formattedHour = hour24.toString().padStart(2, '0');
+    const formattedMinutes = minutes.toString().padStart(2, '0');
+    const formattedSeconds = seconds.toString().padStart(2, '0');
+
+    return `${formattedHour}:${formattedMinutes}:${formattedSeconds}`;
+}
+
+//查询气象数据
 async function Sunrise(
-    id?: string,
-    locale?: string,
+    LAL?: positionType,
     options?: SunriseOptions
 ): Promise<any | null> {
-    const { maxAttempts = 10, baseDelayMs = 500, throwOnFailure = false } = options ?? {};
-
-    // 规范化 locale -> 用于构造路径
-    // 支持 "zh", "zh_CN", "en", "en_US", 也接受 "/en" 之类（会去掉前导 '/')
-    const raw = (locale ?? '').replace(/^\//, '');
-    const langPrefix = raw.split('_')[0];
-    const langPath = (langPrefix === 'zh' || langPrefix === '') ? '' : '/en';
-
-    // 构造 URL
-    const idPath = id ? `${encodeURIComponent(id)}.html` : '';
-    const url = `https://www.qweather.com${langPath}/weather/${idPath}`;
-
+    const { maxAttempts = 3, baseDelayMs = 6000, throwOnFailure = false } = options ?? {};
     // 简单的帮助函数：等待 ms 毫秒
     const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
-   
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        console.log(`Sunrise: Attempt ${attempt} to fetch ${url}`);
-        
         try {
+            // 构造 URL
+            const url = `https://api.sunrise-sunset.org/json?lat=${LAL?.lat}&lng=${LAL?.lng}&tzid=${LAL?.tzid}`;
             const data = await GetHttp(url);
             if (data) {
                 // 如果解析也可能失败，捕获并在必要时重试
                 try {
-                    const json = await extractSunMoonData(data);
-                    return json;
+
+                    return {
+                        rise: convertTo24Hour(data.results.sunrise),
+                        set: convertTo24Hour(data.results.sunset)
+                    };
                 } catch (parseErr) {
+                    console.error('Sunrise: Failed to parse data:', parseErr);
                     // 解析失败：如果达到最大尝试次数则抛/返回，否则继续重试
                     if (attempt === maxAttempts) {
                         if (throwOnFailure) throw parseErr;
@@ -135,7 +144,7 @@ async function Sunrise(
             }
             // 否则继续重试
         }
-       
+
         // 等待：指数退避 + 小随机抖动
         const expo = Math.pow(2, attempt - 1); // 1,2,4,8...
         const jitter = Math.floor(Math.random() * 200); // 0-199 ms 随机抖动
@@ -145,7 +154,7 @@ async function Sunrise(
 
     // 全部尝试完仍未成功
     if (throwOnFailure) {
-        throw new Error(`Sunrise: failed to fetch/parse ${url} after ${maxAttempts} attempts`);
+        throw new Error();
     }
     return null;
 }

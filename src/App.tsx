@@ -17,7 +17,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { AppDataType } from "./Type";
 import { getVersion } from '@tauri-apps/api/app';
 import { isEnabled } from "@tauri-apps/plugin-autostart";
-import { MainWindow, WindowBg } from "./mod/WindowCode";
+import { WindowBg } from "./mod/WindowCode";
 import { listen } from "@tauri-apps/api/event";
 import { adjustTime } from "./mod/adjustTime";
 import { AnimatePresence, motion } from "framer-motion";
@@ -25,6 +25,7 @@ import { GetHttp } from "./mod/sociti";
 import RatingPrompt from "./mod/RatingPrompt";
 import { openStoreRating } from "./mod/openStoreRating";
 import { Updates } from "./updates";
+import { applyTheme } from "./mod/applyTheme";
 GetHttp("https://dev.qweather.com/")
 async function fetchAppVersion() {
   try {
@@ -36,6 +37,7 @@ async function fetchAppVersion() {
   }
 }
 const version = await fetchAppVersion();
+window.Webview.show()
 
 const { Content } = Layout;
 function App() {
@@ -44,8 +46,6 @@ function App() {
   const [themeDack, setThemeDack] = useState(!matchMedia.matches);
   const [options, setOptions] = useState<AutoCompleteProps['options']>([]);
   const [spinning, setSpinning] = useState(true)
-  const [Weather, setWeather] = useState('')
-  const [MainShow, setMainShow] = useState(document.visibilityState === 'visible')
   const [isWin64App, setIsWin64App] = useState(false)
   const [messageApi, contextHolder] = message.useMessage();
   const { Language, locale } = LanguageApp({ AppData, setData })
@@ -55,19 +55,26 @@ function App() {
     setIsWin64App(inMsix)
   }, [])
 
+  useEffect(() => {
+    setTimeout(async () => {
+      const isVisible = await window.appWindow.isVisible()
+      if (isVisible) {
+        window.Webview.show()
+      } else {
+        window.Webview.hide()
+      }
+    }, 3000);
+  }, [])
+
   //导入设置选项
   const { openRc, mains, CitiInit } = Mainoption({
-    setData,
     messageApi,
     locale,
     options,
     getCity,
     Language,
-    AppData,
-    setWeather,
     themeDack
   })
-  MainWindow(setMainShow, AppData as AppDataType)
   useEffect(() => {
     let isMounted = true;
     const setupListener = async () => {
@@ -91,16 +98,20 @@ function App() {
             })
           }, 600);
         }
-
       });
 
       // 返回清理函数以移除事件监听器
       return () => {
         isMounted = false;
-        unlisten();
+        if (unlisten) {
+          try {
+            unlisten();
+          } catch (cleanupError) {
+            console.warn('Error while cleaning up listener:', cleanupError);
+          }
+        }
       };
     };
-
     const cleanupPromise = setupListener();
 
     // 返回一个清理函数来处理异步操作的清理
@@ -113,7 +124,7 @@ function App() {
     if (AppData?.open) {
       StartRady()
     }
-  }, [AppData?.times, AppData?.open])
+  }, [AppData?.times, AppData?.open, AppData?.StyemThemeEnable])
   useEffect(() => {
     if (AppData?.rawTime?.length === 2 && AppData?.rcrl) {
       const rise = adjustTime(AppData?.rawTime[0], AppData?.deviation)
@@ -157,10 +168,8 @@ function App() {
     const presentTime = dayjs(); // 当前时间
     const sunriseTime = dayjs(AppData?.times?.[0], 'HH:mm'); // 日出时间
     const sunsetTime = dayjs(AppData?.times?.[1], 'HH:mm'); // 日落时间
-
     let isLight = false;
     let message = '';
-
     if (presentTime.isAfter(sunriseTime) && presentTime.isBefore(sunsetTime)) {
       isLight = true;
       message = '现在是日出后，日落前';
@@ -172,6 +181,10 @@ function App() {
     if (themeDack === isLight) {
       setSpinning(true);
       try {
+        if (AppData.StyemThemeEnable) {
+          setThemeDack(!isLight)
+          return
+        }
         await invoke('set_system_theme', { isLight });
         console.log(message);
       } finally {
@@ -192,15 +205,23 @@ function App() {
         switch (data.msg) {
           case 'TypeA':
             console.log(`执行任务: ${time}, 数据:`, data.msg);
+            if (AppData.StyemThemeEnable) {
+              setThemeDack(false)
+              return
+            }
             await invoke('set_system_theme', { isLight: true });
             break;
           case 'TypeB':
             console.log(`执行任务: ${time}, 数据:`, data.msg);
+            if (AppData.StyemThemeEnable) {
+              setThemeDack(true)
+              return
+            }
             await invoke('set_system_theme', { isLight: false });
             break;
         }
         console.log(CrontabManager.listTasks());
-        CitiInit(AppData?.city?.id)
+        CitiInit(AppData?.city?.position)
       };
       try {
         // 添加定时任务
@@ -216,16 +237,24 @@ function App() {
     return () => {
       CrontabManager.clearAllTasks()
     };
-  }, [AppData?.times, AppData?.open])
+  }, [AppData?.times, AppData?.open, AppData.StyemThemeEnable])
 
 
+  useUpdateEffect(() => {
+    console.log(AppData?.open, AppData.StyemThemeEnable);
 
+    if (!AppData?.open || !AppData.StyemThemeEnable) return
+
+    if (AppData.StyemTheme) {
+      applyTheme(AppData.StyemTheme[themeDack ? 1 : 0])
+    }
+  }, [themeDack, AppData?.open, AppData.StyemTheme, AppData.StyemThemeEnable])
   async function getCity(search?: string) { //搜索城市
     setOptions(await searchResult(search || '', AppData))
   }
 
   const { Themeconfig, antdToken } = ThemeFun(themeDack, AppData?.winBgEffect)
-  const animationVariants = {
+  const animationVariants = (index: number) => ({
     initial: {
       opacity: 0,
       x: 0,
@@ -243,67 +272,78 @@ function App() {
       x: 100,
       filter: "blur(5px)",
       transition: {
-        duration: 0.36
+        duration: 0.36,
+        delay: index * 0.36 // 第一个组件index为0，第二个为1，第三个为2，这样第二个组件会延迟0.36秒，第三个延迟0.72秒
       }
     },
     transition: {
       duration: 0.26,
       delay: mains.length * 0.08
     },
-    layout: true
+  });
+
+  // 统一的过渡配置
+  const transitionConfig = {
+    duration: 0.26,
+    delay: mains.length * 0.08
   };
   return (
     <ConfigProvider
       theme={Themeconfig}
     >
-      {MainShow ? (
-        < Spin spinning={spinning} indicator={<LoadingOutlined spin style={{ fontSize: 48 }} />} >
-          {contextHolder}
-          <TitleBar
-            spinning={spinning}
-            locale={locale}
-            setSpinning={setSpinning}
-            config={antdToken}
-            Themeconfig={Themeconfig}
-            themeDack={themeDack}
-          />
-          <Layout>
-            <Content className="container">
-              <Flex gap={0} vertical >
-                <AnimatePresence >
-                  <OpContent mains={mains} language={AppData?.language} />
-                  <AnimatePresence >
-                    <motion.div
-                      {...animationVariants}
-                      key={`${AppData?.language}-s`}
-                    >
-                      <Docs isWin64App={isWin64App} locale={locale} version={version} Weather={Weather} />
-                    </motion.div>
-                  </AnimatePresence>
-                  <AnimatePresence>
-                    <motion.div
-                      {...animationVariants}
-                      key={`${AppData?.language}-a`}
-                    >
-                      {isWin64App ? <a
-                        onClick={() => openStoreRating("downloadsandupdates")}
-                        rel="noreferrer">{
-                          locale?.upModal?.textB?.[2]
-                        }</a> :
-                        <Updates version={version} locale={locale} setData={setData} AppData={AppData} />
-                      }
 
-                    </motion.div>
-                  </AnimatePresence>
-                </AnimatePresence>
-              </Flex>
-              { /* 评分组件 */}
-              {isWin64App && <RatingPrompt locale={locale} />}
-            </Content>
-          </Layout>
-        </Spin>
-      ) : null
-      }
+      < Spin spinning={spinning} indicator={<LoadingOutlined spin style={{ fontSize: 48 }} />} >
+        {contextHolder}
+        <TitleBar
+          spinning={spinning}
+          locale={locale}
+          setSpinning={setSpinning}
+          config={antdToken}
+          Themeconfig={Themeconfig}
+          themeDack={themeDack}
+        />
+        <Layout>
+          <Content className="container">
+            <Flex gap={0} vertical >
+              <AnimatePresence >
+                <OpContent mains={mains} language={AppData?.language || 'en'} />
+                <motion.div
+                  key={`docs-${AppData?.language}`}
+                  variants={animationVariants(1)}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={animationVariants(1).transition}
+                  layout
+                >
+                  <Docs isWin64App={isWin64App} locale={locale} version={version} />
+                </motion.div>
+                <motion.div
+                  key={`update-${AppData?.language}`}
+                  variants={animationVariants(1)}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={transitionConfig}
+                  layout
+                >
+                  {isWin64App ? <a
+                    onClick={() => openStoreRating("downloadsandupdates")}
+                    rel="noreferrer">{
+                      locale?.upModal?.textB?.[1]
+                    }</a> :
+                    <Updates version={version} locale={locale} setData={setData} AppData={AppData} />
+                  }
+
+                </motion.div>
+              </AnimatePresence>
+            </Flex>
+            { /* 评分组件 */}
+            {isWin64App && <RatingPrompt locale={locale} />}
+          </Content>
+        </Layout>
+      </Spin>
+
 
     </ConfigProvider >
   );

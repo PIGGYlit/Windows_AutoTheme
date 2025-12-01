@@ -100,3 +100,38 @@ input:focus {
   flex-direction: column;
   text-align: center;
 }
+:root {
+  --sb-size: 6px;
+  /* 滚动条宽度 */
+  --sb-track: rgba(0, 0, 0, 0.04);
+  /* 轨道 */
+  --sb-thumb-color: transparent;
+  /* thumb（Firefox fallback） */
+  --sb-thumb-radius: 10px;
+}
+
+/* WebKit / Chromium / Safari */
+*::-webkit-scrollbar {
+  width: var(--sb-size);
+  height: var(--sb-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: var(--sb-thumb-radius);
+}
+
+*::-webkit-scrollbar-track:hover {
+  background: var(--sb-track);
+  border-radius: var(--sb-thumb-radius);
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: var(--sb-thumb-radius);
+  background: #6d6d6d
+    /* 可以用渐变 */
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  filter: brightness(0.95);
+}
