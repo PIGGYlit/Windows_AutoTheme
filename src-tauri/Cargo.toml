@@ -1,7 +1,7 @@
 [package]
-name = "AutoThemeMode"
+name = "Windows_AutoTheme_Plus"
 version = "1.7.0"
-description = "AutoThemeMode"
+description = "Windows_AutoTheme_Plus"
 authors = ["you"]
 edition = "2021"
 
