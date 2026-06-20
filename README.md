@@ -1,7 +1,7 @@
 # Windows AutoTheme
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/c3cdbcf6-6bdc-4e91-a84a-55ef109c60f5" alt="Screenshot 1" width="100%">
+  <img src="img/Follow_the_system.png" alt="跟随系统模式" width="100%">
 
   #### Language: [中文](/README.md)
 </div>
@@ -11,10 +11,6 @@
 **Windows AutoTheme** 是一个轻量级的 Windows 主题自动切换工具。支持根据 Windows **夜灯（护眼模式）** 状态自动切换系统亮/暗主题，也支持按固定时间定时切换。
 
 后端使用 Rust 执行系统操作，前端采用 TypeScript + Ant Design 5 构建界面。
-
-<div align="center">
-  <img src="https://github.com/user-attachments/assets/8ed6411d-cc19-4884-a2b6-8d0d65f64078" alt="Screenshot 2" width="55%">
-</div>
 
 ---
 
@@ -41,6 +37,10 @@
 
 > 该方式利用 Windows 原生的夜灯计划功能，无需额外配置日出日落 API。
 
+<div align="center">
+  <img src="img/Follow_the_system.png" alt="跟随系统模式" width="80%">
+</div>
+
 ### 模式二：手动定时
 
 设置两个时间点：
@@ -48,12 +48,17 @@
 - `HH:mm` 到 `HH:mm` 之间 → **浅色主题**
 - 其余时间 → **深色主题**
 
+<div align="center">
+  <img src="img/Custom_time.png" alt="手动定时" width="80%">
+</div>
+
 ---
 
 ## 截图
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/5f0c5730-a398-482c-8e6c-e49067d2fe24" alt="pshotA.png" width="45%" style="margin-right: 5%;">
+  <img src="img/DaytimeMode.png" alt="日间模式" width="45%" style="margin-right: 5%;">
+  <img src="img/NightMode.png" alt="夜间模式" width="45%">
 </div>
 
 ---
@@ -93,6 +98,10 @@ npm run tauri build
 | 窗口背景 | Mica / Acrylic |
 
 ---
+
+## 致谢
+
+本工具基于 [tuyangJs/Windows_AutoTheme](https://github.com/tuyangJs/Windows_AutoTheme) 修改完善。
 
 ## 联系作者
 
